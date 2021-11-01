@@ -5,18 +5,23 @@ import (
 	"fmt"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	grpctransport "github.com/go-kit/kit/transport/grpc"
 	uuid "github.com/satori/go.uuid"
 	"google.golang.org/grpc/metadata"
 	"os"
 )
 
 type LogType int
-type contextKey int
-
-const logFilePerm = 0666
+type contextConsoleKey string
 
 const (
-	contextRequestIDKey contextKey = iota
+	callerDepth = 3
+	logFilePerm = 0666
+)
+
+const (
+	consoleContextRequestID       contextConsoleKey = `request-id`
+	consoleContextServiceMetadata contextConsoleKey = `x-microservice-metadata`
 )
 
 const (
@@ -42,7 +47,7 @@ func CreateStdGoKitLog(serviceName string, debug bool) log.Logger {
 		logger,
 		"service", serviceName,
 		"time", log.DefaultTimestampUTC,
-		"caller", log.Caller(3),
+		"caller", log.Caller(callerDepth),
 	)
 	if debug {
 		logger = level.NewFilter(logger, level.AllowDebug())
@@ -50,23 +55,44 @@ func CreateStdGoKitLog(serviceName string, debug bool) log.Logger {
 	return logger
 }
 
+func RequestIDMetadataToContext() grpctransport.ServerRequestFunc {
+	return func(ctx context.Context, md metadata.MD) context.Context {
+		requestID, ok := md[string(consoleContextServiceMetadata)]
+		if !ok {
+			return ctx
+		}
+		if ok {
+			ctx = context.WithValue(ctx, consoleContextRequestID, requestID[0])
+		}
+		return ctx
+	}
+}
+
+func ContextToRequestIDMetadata() grpctransport.ClientRequestFunc {
+	return func(ctx context.Context, md *metadata.MD) context.Context {
+		requestID, ok := ctx.Value(consoleContextRequestID).(string)
+		if ok {
+			(*md)[string(consoleContextServiceMetadata)] = []string{requestID}
+		}
+		return ctx
+	}
+}
+
+func createNewLogWithContextRequestID(parentCtx context.Context, l log.Logger, funcName string) (context.Context, log.Logger) {
+	requestID := uuid.NewV4().String()
+	l = log.With(l, "request_id", requestID, "func_name", funcName)
+	return context.WithValue(parentCtx, consoleContextRequestID, requestID), l
+}
+
 func Log(ctx context.Context, l log.Logger, funcName string) (context.Context, log.Logger) {
-	ck, ok := ctx.Value("reqid").(string)
+	requestID, ok := ctx.Value(consoleContextRequestID).(string)
 	if ok {
-		if ck != "" {
-			fmt.Println("request id exist")
-			l = log.With(l, "request_id", ck, "func_name", funcName)
+		if requestID != "" {
+			l = log.With(l, "request_id", requestID, "func_name", funcName)
 			return ctx, l
 		} else {
-			fmt.Println("request id not exist")
-			requestID := uuid.NewV4().String()
-			l = log.With(l, "request_id", requestID, "func_name", funcName)
-			return metadata.NewIncomingContext(ctx, metadata.Pairs("requestid", requestID)), l
+			return createNewLogWithContextRequestID(ctx, l, funcName)
 		}
-	} else {
-		fmt.Println("request id not exist not ok")
-		requestID := uuid.NewV4().String()
-		l = log.With(l, "request_id", requestID, "func_name", funcName)
-		return metadata.NewIncomingContext(ctx, metadata.Pairs("requestid", requestID)), l
 	}
+	return createNewLogWithContextRequestID(ctx, l, funcName)
 }
