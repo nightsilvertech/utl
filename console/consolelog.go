@@ -35,8 +35,8 @@ func (lt LogType) String() string {
 	return []string{"log_info", "log_warn", "log_err", "log_data"}[lt]
 }
 
-func CreateStdGoKitLog(serviceName string, debug bool) log.Logger {
-	f, err := os.OpenFile("service.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, logFilePerm)
+func CreateStdGoKitLog(serviceName string, debug bool, filePath string) log.Logger {
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, logFilePerm)
 	if err != nil {
 		panic(fmt.Sprintf("error opening file: %v", err))
 	}
