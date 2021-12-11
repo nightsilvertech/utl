@@ -1,4 +1,4 @@
-	package jsonwebtoken
+package jsonwebtoken
 
 import (
 	"context"
