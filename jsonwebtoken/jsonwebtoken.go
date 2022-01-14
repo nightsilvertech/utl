@@ -14,8 +14,7 @@ const (
 	BearerSeparator    = ` `
 	BearerPrefix       = `Bearer`
 	BearerValidLength  = 2
-	BearerTokenIndex   = 0
-	BearerRefreshIndex = 1
+	BearerTokenIndex   = 1
 )
 
 var (

@@ -36,12 +36,17 @@ func (lt LogType) String() string {
 }
 
 func CreateStdGoKitLog(serviceName string, debug bool, filePath string) log.Logger {
-	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, logFilePerm)
-	if err != nil {
-		panic(fmt.Sprintf("error opening file: %v", err))
+	var logger log.Logger
+	if len(filePath) > 0 && filePath != "none" {
+		f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, logFilePerm)
+		if err != nil {
+			panic(fmt.Sprintf("error opening file: %v", err))
+		}
+		logger = log.NewLogfmtLogger(log.NewSyncWriter(f))
+	} else {
+		logger = log.NewLogfmtLogger(os.Stderr)
 	}
 
-	logger := log.NewLogfmtLogger(log.NewSyncWriter(f))
 	logger = log.NewSyncLogger(logger)
 	logger = log.With(
 		logger,
