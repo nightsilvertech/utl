@@ -7,14 +7,15 @@ import (
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 	jwtlib "github.com/golang-jwt/jwt"
 	"google.golang.org/grpc/metadata"
+	"strings"
 	"time"
 )
 
 const (
-	BearerSeparator    = ` `
-	BearerPrefix       = `Bearer`
-	BearerValidLength  = 2
-	BearerTokenIndex   = 1
+	BearerSeparator   = ` `
+	BearerPrefix      = `Bearer`
+	BearerValidLength = 2
+	BearerTokenIndex  = 1
 )
 
 var (
@@ -117,4 +118,40 @@ func GenerateJWT(data map[string]string, expired time.Duration, secret string) (
 	}
 	res = fmt.Sprintf("%s:%s", token, refresh)
 	return res, nil
+}
+
+func bearer(ctx context.Context) (string, error) {
+	var tokenMetadata []string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		tokenMetadata = md.Get("authorization")
+	}
+	if len(tokenMetadata) == 0 {
+		return "", errors.New("no token given")
+	}
+	token := strings.Split(tokenMetadata[0], " ")
+	if len(token) != 2 || token[0] != "Bearer" {
+		return "", errors.New("invalid bearer token")
+	}
+	return token[1], nil
+}
+
+func ExtractKeysFromCtx(ctx context.Context, secret string, keys []string) (res map[string]string, err error) {
+	bearer, err := bearer(ctx)
+	if err != nil {
+		return res, err
+	}
+	token, err := Parser(bearer, secret)
+	if err != nil {
+		return res, err
+	}
+	claims := make(map[string]string)
+	for _, key := range keys {
+		claimed, err := Claim(token, key)
+		if err != nil {
+			return res, err
+		}
+		claims[key] = claimed
+	}
+	return claims, nil
 }
