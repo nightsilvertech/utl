@@ -35,7 +35,7 @@ func Send(appKey string, notification Notification, pretend bool) (res string, e
 		return "SENT", nil
 	} else {
 		headers := []string{
-			fmt.Sprintf("Authorizationa%sKey=%s", headerSeparator, appKey),
+			fmt.Sprintf("Authorization%sKey=%s", headerSeparator, appKey),
 		}
 		jsonData, err := json.Marshal(notification)
 		if err != nil {
