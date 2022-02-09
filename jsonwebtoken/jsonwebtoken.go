@@ -108,7 +108,7 @@ func GenerateJWT(data map[string]string, expired time.Duration, secret string) (
 
 	refreshToken := jwtlib.New(jwtlib.SigningMethodHS256)
 	rtClaims := refreshToken.Claims.(jwtlib.MapClaims)
-	rtClaims["exp"] = time.Now().Add(expired * 2).Unix()
+	rtClaims["exp"] = time.Now().Add(time.Hour * 1440).Unix()
 	for k, v := range data {
 		rtClaims[k] = v
 	}
