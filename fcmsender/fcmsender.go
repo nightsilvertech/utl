@@ -3,73 +3,64 @@ package fcmsender
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 )
 
-const (
-	googleFcmApiBaseURL = `https://fcm.googleapis.com/fcm/send`
-	headerSeparator     = `|`
-	headerLength        = 2
-	keyIndex            = 0
-	valueIndex          = 1
-)
-
-type Notif struct {
+type Notification struct {
 	Body     string `json:"body"`
 	Title    string `json:"title"`
 	Subtitle string `json:"subtitle"`
+	Tag      string `json:"tag"`
 }
 
-type Notification struct {
-	To    string `json:"to"`
-	Notif Notif  `json:"notification"`
+type Data struct {
+	JsonExtraData string `json:"jsonExtraData"`
 }
 
-func Send(appKey string, notification Notification, pretend bool) (res string, err error) {
-	if pretend {
-		return "SENT", nil
-	} else {
-		headers := []string{
-			fmt.Sprintf("Authorization%sKey=%s", headerSeparator, appKey),
-		}
-		jsonData, err := json.Marshal(notification)
-		if err != nil {
-			return res, err
-		}
-		req, err := http.NewRequest(http.MethodPost, googleFcmApiBaseURL, bytes.NewBuffer(jsonData))
-		if err != nil {
-			return res, err
-		}
-		for _, header := range headers {
-			keyValue := strings.Split(header, headerSeparator)
-			if len(keyValue) == headerLength {
-				req.Header.Set(keyValue[keyIndex], keyValue[valueIndex])
-			}
-		}
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			return res, err
-		}
-		defer func(Body io.ReadCloser) {
-			_ = Body.Close()
-		}(resp.Body)
+type Payload struct {
+	ServerKey    string       `json:"-"`
+	To           string       `json:"to"`
+	Notification Notification `json:"notification"`
+	Data         Data         `json:"data"`
+}
 
-		if resp.StatusCode > 201 {
-			bodyBytes, _ := ioutil.ReadAll(resp.Body)
-			msg := fmt.Sprintf("http status code %d error response %s", resp.StatusCode, string(bodyBytes))
-			return res, errors.New(msg)
-		}
+type Result struct {
+	MessageId string `json:"message_id"`
+}
 
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return res, err
-		}
-		return string(bodyBytes), nil
+type FcmResponse struct {
+	MulticastId  int64   `json:"multicast_id"`
+	Success      int     `json:"success"`
+	Failure      int     `json:"failure"`
+	CanonicalIds int      `json:"canonical_ids"`
+	Results      []Result `json:"results"`
+}
+
+func Send(payload Payload) (res FcmResponse, err error) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return res, err
 	}
+	req, err := http.NewRequest("POST", "https://fcm.googleapis.com/fcm/send", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return res, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("key=%s", payload.ServerKey))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return res, err
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return res, err
+	}
+	err = json.Unmarshal(bodyBytes, &res)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
 }
